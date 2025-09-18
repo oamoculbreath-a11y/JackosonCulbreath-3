@@ -94,9 +94,6 @@
         <!-- Footer for shareable link and user ID -->
         <footer class="p-8 text-center bg-gray-100">
             <div class="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
-                <button onclick="copyShareableLink()" class="bg-yellow-400 hover:bg-yellow-500 text-slate-800 font-bold py-3 px-6 rounded-full transition-colors duration-300 shadow-lg transform hover:scale-105">
-                    Copy Shareable Link
-                </button>
                 <a href="https://surreywaterpolo.com/" target="_blank" rel="noopener noreferrer" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-6 rounded-full transition-colors duration-300 shadow-lg transform hover:scale-105">
                     Surrey Water Polo
                 </a>
@@ -105,7 +102,6 @@
                 </a>
             </div>
             <p id="user-id-display" class="mt-4 text-sm text-gray-400">Your User ID: Loading...</p>
-            <div id="status-message" class="mt-4 text-blue-500 font-semibold hidden">Link copied to clipboard!</div>
         </footer>
 
     </div>
@@ -221,8 +217,17 @@
             document.getElementById('team-logo').src = data.teamLogoUrl || 'placeholder.jpg';
         };
 
-        const fetchData = (docId) => {
-            const bioRef = doc(db, `/artifacts/${appId}/public/data/playerBios/${docId}`);
+        const getOrCreateBio = async (userId) => {
+            const bioRef = doc(db, `/artifacts/${appId}/public/data/playerBios`, userId);
+            const docSnap = await getDoc(bioRef);
+            if (!docSnap.exists()) {
+                await setDoc(bioRef, initialBioData);
+                console.log("Created new bio document for user:", userId);
+            }
+        };
+
+        const listenToBio = (userId) => {
+            const bioRef = doc(db, `/artifacts/${appId}/public/data/playerBios/${userId}`);
             onSnapshot(bioRef, (docSnap) => {
                 if (docSnap.exists()) {
                     updateUI(docSnap.data());
@@ -234,30 +239,12 @@
             });
         };
 
-        const getOrCreateShareableDoc = async (userId) => {
-            const bioRef = doc(db, `/artifacts/${appId}/public/data/playerBios`, userId);
-            const docSnap = await getDoc(bioRef);
-
-            if (!docSnap.exists()) {
-                await setDoc(bioRef, initialBioData);
-                console.log("Created new bio document for user:", userId);
-            }
-        };
-
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 userId = user.uid;
                 document.getElementById('user-id-display').innerText = `Your User ID: ${userId}`;
-                
-                const urlParams = new URLSearchParams(window.location.search);
-                const shareableId = urlParams.get('id');
-
-                if (shareableId) {
-                    fetchData(shareableId);
-                } else {
-                    await getOrCreateShareableDoc(userId);
-                    fetchData(userId);
-                }
+                await getOrCreateBio(userId);
+                listenToBio(userId);
             } else {
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
@@ -266,21 +253,6 @@
                 }
             }
         });
-
-        window.copyShareableLink = () => {
-            if (userId) {
-                const shareableUrl = `${window.location.origin}${window.location.pathname}?id=${userId}`;
-                navigator.clipboard.writeText(shareableUrl).then(() => {
-                    const statusMessage = document.getElementById('status-message');
-                    statusMessage.classList.remove('hidden');
-                    setTimeout(() => {
-                        statusMessage.classList.add('hidden');
-                    }, 2000);
-                }).catch(err => {
-                    console.error('Failed to copy text: ', err);
-                });
-            }
-        };
     </script>
 </body>
 </html>
